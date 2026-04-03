@@ -66,13 +66,14 @@ contract DiamondDeployer {
         });
 
         // RiskParamsFacet selectors
-        bytes4[] memory riskSelectors = new bytes4[](6);
+        bytes4[] memory riskSelectors = new bytes4[](7);
         riskSelectors[0] = RiskParamsFacet.initializeRiskParams.selector;
         riskSelectors[1] = RiskParamsFacet.setDailySpendLimit.selector;
         riskSelectors[2] = RiskParamsFacet.setMaxPositionSize.selector;
         riskSelectors[3] = RiskParamsFacet.addAllowedProtocol.selector;
         riskSelectors[4] = RiskParamsFacet.removeAllowedProtocol.selector;
         riskSelectors[5] = RiskParamsFacet.getRiskParams.selector;
+        riskSelectors[6] = RiskParamsFacet.isProtocolAllowed.selector;
 
         cuts[1] = IDiamondCut.FacetCut({
             facetAddress: address(riskParamsFacet),
