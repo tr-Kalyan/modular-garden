@@ -24,7 +24,7 @@ import {LibManagerStorage, ManagerStorage} from "../storage/GardenStorage.sol";
  * the owner set. On-chain enforcement — not off-chain trust.
  * This is the primitive for trustless AI-managed portfolios.
  */
-contract ManagerFact {
+contract ManagerFacet {
     // =============================================================
     //                         EVENTS
     // =============================================================

@@ -64,6 +64,20 @@ contract Diamond {
     }
 
     /**
+     * @notice Transfer Diamond ownership to a new address.
+     * @dev Only current owner can call this.
+     *      Used by factory after deployment to hand off to user.
+     *      Same pattern GardenFactory will use — deploy with factory
+     *      as temp owner, install facets, transfer to real user.
+     *
+     * @param _newOwner Address to transfer ownership to
+     */
+    function transferOwnership(address _newOwner) external {
+        LibDiamond.enforceIsContractOwner();
+        LibDiamond.setContractOwner(_newOwner);
+    }
+
+    /**
      * @notice Routes all calls to the appropriate facet.
      * @dev This is the core of the Diamond pattern.
      *      Every function call that isn't in Diamond.sol lands here.
