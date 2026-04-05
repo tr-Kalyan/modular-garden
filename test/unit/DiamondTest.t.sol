@@ -77,7 +77,7 @@ contract DiamondTest is Test {
      *      If a facet is missing here, calls to it will revert
      *      with FunctionNotFound.
      */
-    function test_AllFacetsRegistered() public {
+    function test_AllFacetsRegistered() view public {
         IDiamondLoupe loupe = IDiamondLoupe(address(diamond));
         address[] memory facetAddrs = loupe.facetAddresses();
 
@@ -92,7 +92,7 @@ contract DiamondTest is Test {
      * @dev Proves the routing table is populated correctly.
      *      If this passes, fallback() will route to the right facet.
      */
-    function test_LoupeReportsFacetForSelector() public {
+    function test_LoupeReportsFacetForSelector() view public {
         IDiamondLoupe loupe = IDiamondLoupe(address(diamond));
 
         // Look up which facet handles facetAddresses()
