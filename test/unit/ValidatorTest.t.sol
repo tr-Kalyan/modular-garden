@@ -79,11 +79,7 @@ contract ValidatorTest is Test {
      * @notice Cannot initialize twice.
      */
     function test_Revert_CannotInitializeTwice() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ECDSAValidatorFacet.AlreadyInitialized.selector
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ECDSAValidatorFacet.AlreadyInitialized.selector));
         vm.prank(owner);
         validator.initializeValidator(owner);
     }
@@ -94,16 +90,9 @@ contract ValidatorTest is Test {
     function test_Revert_AttackerCannotInitialize() public {
         DiamondDeployer freshDeployer = new DiamondDeployer();
         Diamond freshDiamond = freshDeployer.deploy(owner);
-        ECDSAValidatorFacet freshValidator =
-            ECDSAValidatorFacet(address(freshDiamond));
+        ECDSAValidatorFacet freshValidator = ECDSAValidatorFacet(address(freshDiamond));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
         vm.prank(attacker);
         freshValidator.initializeValidator(attacker);
     }
@@ -133,10 +122,7 @@ contract ValidatorTest is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
 
         // Build minimal PackedUserOperation
-        PackedUserOperation memory userOp = _buildUserOp(
-            address(diamond),
-            signature
-        );
+        PackedUserOperation memory userOp = _buildUserOp(address(diamond), signature);
 
         // Call validateUserOp as EntryPoint
         vm.prank(entryPoint);
@@ -157,10 +143,7 @@ contract ValidatorTest is Test {
         // Pass garbage bytes as signature
         bytes memory badSignature = bytes("this is not a valid signature");
 
-        PackedUserOperation memory userOp = _buildUserOp(
-            address(diamond),
-            badSignature
-        );
+        PackedUserOperation memory userOp = _buildUserOp(address(diamond), badSignature);
 
         // Must NOT revert — must return SIG_VALIDATION_FAILED
         vm.prank(entryPoint);
@@ -182,10 +165,7 @@ contract ValidatorTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(attackerPrivateKey, ethSignedHash);
         bytes memory attackerSignature = abi.encodePacked(r, s, v);
 
-        PackedUserOperation memory userOp = _buildUserOp(
-            address(diamond),
-            attackerSignature
-        );
+        PackedUserOperation memory userOp = _buildUserOp(address(diamond), attackerSignature);
 
         vm.prank(entryPoint);
         uint256 result = validator.validateUserOp(userOp, userOpHash, 0);
@@ -200,17 +180,9 @@ contract ValidatorTest is Test {
      */
     function test_Revert_OnlyEntryPointCanValidate() public {
         bytes32 userOpHash = keccak256("test userOp hash");
-        PackedUserOperation memory userOp = _buildUserOp(
-            address(diamond),
-            bytes("")
-        );
+        PackedUserOperation memory userOp = _buildUserOp(address(diamond), bytes(""));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ECDSAValidatorFacet.NotEntryPoint.selector,
-                attacker
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ECDSAValidatorFacet.NotEntryPoint.selector, attacker));
 
         vm.prank(attacker);
         validator.validateUserOp(userOp, userOpHash, 0);
@@ -251,10 +223,7 @@ contract ValidatorTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPrivateKey, ethSignedHash);
         bytes memory oldSignature = abi.encodePacked(r, s, v);
 
-        PackedUserOperation memory userOp = _buildUserOp(
-            address(diamond),
-            oldSignature
-        );
+        PackedUserOperation memory userOp = _buildUserOp(address(diamond), oldSignature);
 
         vm.prank(entryPoint);
         uint256 result = validator.validateUserOp(userOp, userOpHash, 0);
@@ -267,13 +236,7 @@ contract ValidatorTest is Test {
      * @dev If attacker could rotate, they'd lock out the real owner.
      */
     function test_Revert_AttackerCannotRotateKey() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         vm.prank(attacker);
         validator.setValidatorOwner(attacker);
@@ -288,10 +251,7 @@ contract ValidatorTest is Test {
      * @dev Most fields are zero — we only care about sender and signature
      *      for validator tests.
      */
-    function _buildUserOp(
-        address sender,
-        bytes memory signature
-    ) internal pure returns (PackedUserOperation memory) {
+    function _buildUserOp(address sender, bytes memory signature) internal pure returns (PackedUserOperation memory) {
         return PackedUserOperation({
             sender: sender,
             nonce: 0,

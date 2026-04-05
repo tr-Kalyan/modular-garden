@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibValidatorStorage, ValidatorStorage} from "../storage/GardenStorage.sol";
