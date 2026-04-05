@@ -127,6 +127,36 @@ struct SwapStorage {
 }
 
 // =============================================================
+//                    VALIDATOR STORAGE
+// =============================================================
+
+/**
+ * @notice Storage for ECDSAValidatorFacet.
+ * @dev Stores the owner address that signatures are verified against.
+ *
+ * owner:
+ *      The address whose private key signs UserOperations.
+ *      Set during initialization.
+ *      Can be updated via setOwner() - key rotaion without redeployment.
+ *
+ * WHY SEPERATE FROM LibDiamond.contractOwner:
+ *      LibDiamond.contractOwner controls Diamond upgrades (diamondCut).
+ *      Should be a multisig or timelock — used rarely, high security.
+ *
+ *      ValidatorStorage.owner controls UserOperation signing.
+ *      Used for every strategy execution — can be a standard EOA.
+ *      Can be rotated via setOwner() without touching diamondCut.
+ *
+ *      Compromising the signing key does not grant upgrade access.
+ *      Compromising the Diamond owner does not grant execution access.
+ *      Two independent threat surfaces.
+ */
+struct ValidatorStorage {
+    address owner;
+    bool initialized;
+}
+
+// =============================================================
 //                    STORAGE LIBRARIES
 // =============================================================
 
@@ -193,6 +223,19 @@ library LibSwapStorage {
         keccak256(abi.encode(uint256(keccak256(bytes("modular.garden.swap"))) - 1)) & ~bytes32(uint256(0xff));
 
     function get() internal pure returns (SwapStorage storage $) {
+        bytes32 position = STORAGE_POSITION;
+        assembly {
+            $.slot := position
+        }
+    }
+}
+
+library LibValidatorStorage {
+    /// @dev keccak256(abi.encode(uint256(keccak256("modular.garden.validator")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 constant STORAGE_POSITION =
+        keccak256(abi.encode(uint256(keccak256(bytes("modular.garden.validator"))) - 1)) & ~bytes32(uint256(0xff));
+
+    function get() internal pure returns (ValidatorStorage storage $) {
         bytes32 position = STORAGE_POSITION;
         assembly {
             $.slot := position

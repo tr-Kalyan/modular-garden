@@ -24,7 +24,6 @@ import {ManagerFacet} from "../../src/facets/ManagerFacet.sol";
  * 8. Setting limit to 0 freezes all activity
  */
 contract RiskParamsTest is Test {
-
     // =============================================================
     //                         STATE
     // =============================================================
@@ -77,12 +76,7 @@ contract RiskParamsTest is Test {
      * @dev Verifies all values stored correctly in ERC-7201 storage.
      */
     function test_InitializationSetsCorrectValues() public {
-        (
-            uint256 dailyLimit,
-            uint256 maxPosition,
-            uint256 dailySpent,
-            uint256 lastReset
-        ) = riskParams.getRiskParams();
+        (uint256 dailyLimit, uint256 maxPosition, uint256 dailySpent, uint256 lastReset) = riskParams.getRiskParams();
 
         assertEq(dailyLimit, DAILY_LIMIT, "Daily limit incorrect");
         assertEq(maxPosition, MAX_POSITION, "Max position incorrect");
@@ -98,9 +92,7 @@ contract RiskParamsTest is Test {
     function test_Revert_CannotInitializeTwice() public {
         address[] memory protocols = new address[](0);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(RiskParamsFacet.AlreadyInitialized.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(RiskParamsFacet.AlreadyInitialized.selector));
 
         vm.prank(owner);
         riskParams.initializeRiskParams(1 ether, 1 ether, protocols);
@@ -118,13 +110,7 @@ contract RiskParamsTest is Test {
 
         address[] memory protocols = new address[](0);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         vm.prank(attacker);
         freshRisk.initializeRiskParams(1 ether, 1 ether, protocols);
@@ -138,24 +124,15 @@ contract RiskParamsTest is Test {
      * @notice Whitelisted protocols are correctly marked.
      */
     function test_WhitelistedProtocolsAllowed() public {
-        assertTrue(
-            riskParams.isProtocolAllowed(aavePool),
-            "Aave should be whitelisted"
-        );
-        assertTrue(
-            riskParams.isProtocolAllowed(uniswapRouter),
-            "Uniswap should be whitelisted"
-        );
+        assertTrue(riskParams.isProtocolAllowed(aavePool), "Aave should be whitelisted");
+        assertTrue(riskParams.isProtocolAllowed(uniswapRouter), "Uniswap should be whitelisted");
     }
 
     /**
      * @notice Non-whitelisted protocols are blocked.
      */
     function test_NonWhitelistedProtocolBlocked() public {
-        assertFalse(
-            riskParams.isProtocolAllowed(maliciousProtocol),
-            "Malicious protocol should not be whitelisted"
-        );
+        assertFalse(riskParams.isProtocolAllowed(maliciousProtocol), "Malicious protocol should not be whitelisted");
     }
 
     /**
@@ -189,13 +166,7 @@ contract RiskParamsTest is Test {
      * @notice Attacker cannot modify protocol whitelist.
      */
     function test_Revert_AttackerCannotAddProtocol() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         vm.prank(attacker);
         riskParams.addAllowedProtocol(makeAddr("anyProtocol"));
@@ -241,13 +212,7 @@ contract RiskParamsTest is Test {
         // Manager tries to execute — should revert
         // Any amount > 0 exceeds remaining budget of 0
         vm.deal(manager, 10 ether);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.DailySpendLimitExceeded.selector,
-                1 ether,
-                0
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.DailySpendLimitExceeded.selector, 1 ether, 0));
         vm.prank(manager);
         managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
     }
@@ -256,13 +221,7 @@ contract RiskParamsTest is Test {
      * @notice Attacker cannot update limits.
      */
     function test_Revert_AttackerCannotSetLimit() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         vm.prank(attacker);
         riskParams.setDailySpendLimit(100 ether);
@@ -288,10 +247,6 @@ contract RiskParamsTest is Test {
         // After warp, next enforceAndRecord call should reset counter
         // We verify by checking lastResetTimestamp changed
         // Full integration test in ManagerTest will verify the full flow
-        assertGt(
-            block.timestamp,
-            initialReset + 24 hours,
-            "Should be past reset window"
-        );
+        assertGt(block.timestamp, initialReset + 24 hours, "Should be past reset window");
     }
 }

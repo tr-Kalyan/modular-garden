@@ -30,7 +30,6 @@ import {LibRiskParams} from "../../src/libraries/LibRiskParams.sol";
  * D. Manager tries to reset spend counter via deliberate revert
  */
 contract ManagerTest is Test {
-
     // =============================================================
     //                         STATE
     // =============================================================
@@ -128,12 +127,7 @@ contract ManagerTest is Test {
      * @dev Random address cannot execute strategies.
      */
     function test_Revert_RandomCannotExecute() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ManagerFacet.NotManager.selector,
-                attacker
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ManagerFacet.NotManager.selector, attacker));
 
         vm.prank(attacker);
         managerFacet.execute(aavePool, "", 0);
@@ -147,12 +141,7 @@ contract ManagerTest is Test {
      *      pattern — compromised owner key = compromised execution.
      */
     function test_Revert_OwnerCannotExecute() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ManagerFacet.NotManager.selector,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ManagerFacet.NotManager.selector, owner));
 
         vm.prank(owner);
         managerFacet.execute(aavePool, "", 0);
@@ -166,12 +155,7 @@ contract ManagerTest is Test {
         vm.prank(owner);
         managerFacet.revokeManager();
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ManagerFacet.NotManager.selector,
-                manager
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(ManagerFacet.NotManager.selector, manager));
 
         vm.prank(manager);
         managerFacet.execute(aavePool, "", 0);
@@ -186,13 +170,7 @@ contract ManagerTest is Test {
      * @dev If this fails, attacker gains full execution rights.
      */
     function test_Attack_AttackerCannotSetManager() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         vm.prank(attacker);
         managerFacet.setManager(attacker);
@@ -216,13 +194,7 @@ contract ManagerTest is Test {
         riskParams.setMaxPositionSize(15 ether);
 
         // Try to spend 11 ether — exceeds 10 ether daily limit
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.DailySpendLimitExceeded.selector,
-                11 ether,
-                10 ether
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.DailySpendLimitExceeded.selector, 11 ether, 10 ether));
 
         vm.prank(manager);
         managerFacet.execute{value: 11 ether}(aavePool, "", 11 ether);
@@ -234,13 +206,7 @@ contract ManagerTest is Test {
      */
     function test_Attack_ManagerCannotExceedMaxPosition() public {
         // Try to move 5 ether — exceeds MAX_POSITION of 3 ether
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.MaxPositionSizeExceeded.selector,
-                5 ether,
-                MAX_POSITION
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.MaxPositionSizeExceeded.selector, 5 ether, MAX_POSITION));
 
         vm.prank(manager);
         managerFacet.execute{value: 5 ether}(aavePool, "", 5 ether);
@@ -252,12 +218,7 @@ contract ManagerTest is Test {
      *      Protocol whitelist prevents this.
      */
     function test_Attack_ManagerCannotCallMaliciousProtocol() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.ProtocolNotAllowed.selector,
-                maliciousProtocol
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.ProtocolNotAllowed.selector, maliciousProtocol));
 
         vm.prank(manager);
         managerFacet.execute(maliciousProtocol, "", 1 ether);
@@ -310,13 +271,7 @@ contract ManagerTest is Test {
 
         // 9 ether spent. Only 1 ether remaining.
         // Try 2 ether — should fail
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.DailySpendLimitExceeded.selector,
-                2 ether,
-                1 ether
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.DailySpendLimitExceeded.selector, 2 ether, 1 ether));
 
         vm.prank(manager);
         managerFacet.execute{value: 2 ether}(aavePool, "", 2 ether);
@@ -340,13 +295,7 @@ contract ManagerTest is Test {
         assertEq(spent, 10 ether);
 
         // Try again — should fail
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.DailySpendLimitExceeded.selector,
-                1 ether,
-                0
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.DailySpendLimitExceeded.selector, 1 ether, 0));
         vm.prank(manager);
         managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
 

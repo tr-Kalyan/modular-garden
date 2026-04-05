@@ -22,7 +22,6 @@ import {RiskParamsFacet} from "../../src/facets/RiskParamsFacet.sol";
  * 5. Unknown selectors revert with FunctionNotFound
  */
 contract DiamondTest is Test {
-
     // =============================================================
     //                         STATE
     // =============================================================
@@ -49,7 +48,6 @@ contract DiamondTest is Test {
 
         // Deploy as owner — vm.prank makes next call come from owner
         diamond = deployer.deploy(owner);
-        
     }
 
     // =============================================================
@@ -85,7 +83,7 @@ contract DiamondTest is Test {
 
         // We installed 4 facets: DiamondCut, DiamondLoupe,
         // RiskParams, Manager
-        assertEq(facetAddrs.length, 4, "Should have 4 facets registered");
+        assertEq(facetAddrs.length, 5, "Should have 5 facets registered");
         console.log("Facets registered:", facetAddrs.length);
     }
 
@@ -103,9 +101,7 @@ contract DiamondTest is Test {
 
         // Should be DiamondLoupeFacet address
         assertEq(
-            facetAddr,
-            address(deployer.diamondLoupeFacet()),
-            "facetAddresses selector should map to DiamondLoupeFacet"
+            facetAddr, address(deployer.diamondLoupeFacet()), "facetAddresses selector should map to DiamondLoupeFacet"
         );
     }
 
@@ -124,13 +120,7 @@ contract DiamondTest is Test {
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](0);
 
         // Expect revert with NotContractOwner error
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         // Attacker tries to cut — should revert
         vm.prank(attacker);
@@ -147,17 +137,10 @@ contract DiamondTest is Test {
         // Call Diamond with a selector that has no registered facet
         bytes4 unknownSelector = bytes4(keccak256("nonExistentFunction()"));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Diamond.FunctionNotFound.selector,
-                unknownSelector
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Diamond.FunctionNotFound.selector, unknownSelector));
 
         // Low level call with the unknown selector
-        (bool success,) = address(diamond).call(
-            abi.encodeWithSelector(unknownSelector)
-        );
+        (bool success,) = address(diamond).call(abi.encodeWithSelector(unknownSelector));
         // vm.expectRevert handles the assertion
         // success will be false but expectRevert catches it
     }
@@ -178,9 +161,7 @@ contract DiamondTest is Test {
 
         IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](1);
         cuts[0] = IDiamondCut.FacetCut({
-            facetAddress: address(newFacet),
-            action: IDiamondCut.FacetCutAction.Replace,
-            functionSelectors: selectors
+            facetAddress: address(newFacet), action: IDiamondCut.FacetCutAction.Replace, functionSelectors: selectors
         });
 
         // Owner calls — should succeed
@@ -204,9 +185,7 @@ contract DiamondTest is Test {
      */
     function test_DirectFacetCallCannotAffectDiamond() public {
         // Call RiskParamsFacet directly — not through Diamond
-        RiskParamsFacet directFacet = RiskParamsFacet(
-            address(deployer.riskParamsFacet())
-        );
+        RiskParamsFacet directFacet = RiskParamsFacet(address(deployer.riskParamsFacet()));
 
         address[] memory protocols = new address[](0);
 
