@@ -21,62 +21,77 @@ library LibRiskParams {
     //                         ERRORS
     // =============================================================
 
-    error DailySpendLimitExceeded(uint256 attempted, uint256 remaining);
     error MaxPositionSizeExceeded(uint256 attempted, uint256 maximum);
     error ProtocolNotAllowed(address protocol);
     error InvalidAmount();
+    error ActionDailyLimitExceeded(bytes4 selector, uint256 attempted, uint256 remaining);
 
     // =============================================================
     //                         EVENTS
     // =============================================================
 
-    event SpendRecorded(uint256 amount, uint256 totalSpentToday);
+    /**
+     * @notice Emitted when a manager's action spend is recorded.
+     * @param selector      Function selector identifying the action type
+     * @param amount        Value of this action
+     * @param totalSpent    Running total spent for this action type today
+    */
+    event ActionSpendRecorded(bytes4 indexed selector, uint256 amount, uint256 totalSpent);
+
 
     /**
      * @notice Enforce all risk checks and record the spend.
-     * @dev Called by ManagerFacet before every execution.
-     *      Checks-Effects-Interactions order is critical here:
+     * @dev Called by ManagerFacet and facets before every execution.
+     *      Checks-Effects-Interactions order is critical:
      *      1. Validate inputs
-     *      2. Reset counter if needed
-     *      3. Check all limits
-     *      4. Update state (dailySpent)
-     *      External call happens AFTER this returns in ManagerFacet.
+     *      2. Check protocol whitelist
+     *      3. Check global position size cap
+     *      4. Reset per-action counter if 24hrs passed
+     *      5. Check per-action daily limit
+     *      6. Update state (actionDailySpent)
+     *      External call happens AFTER this returns in caller.
      *
-     * @param _amount ETH value of the action
-     * @param _protocol Target protocol address
-     */
-    function enforceAndRecord(uint256 _amount, address _protocol) internal {
+     * WHY PER-ACTION NOT GLOBAL:
+     *      Independent budgets per action type allow complex strategies.
+     *      Swap budget exhausted → deposit budget still available.
+     *      Manager can chain: swap → deposit proceeds → earn yield.
+     *
+     * @param _amount    Value of the action
+     * @param _protocol  Target protocol address
+     * @param _selector  Function selector identifying action type
+    */
+    function enforceAndRecord(
+        uint256 _amount,
+        address _protocol,
+        bytes4 _selector        // which action type
+    ) internal {
         if (_amount == 0) revert InvalidAmount();
 
         RiskParamsStorage storage $ = LibRiskParamsStorage.get();
 
-        // Auto-reset daily counter if 24 hours have passed
-        // block.timestamp is acceptable here — 15 second miner
-        // manipulation window does not meaningfully affect a 24hr reset
-        if (block.timestamp >= $.lastResetTimestamp + 24 hours) {
-            $.dailySpent = 0;
-            $.lastResetTimestamp = block.timestamp;
-        }
-
-        // Check protocol is whitelisted BEFORE any value checks
-        // Cheapest revert path for unauthorized protocols
+        // Protocol whitelist check
         if (!$.allowedProtocols[_protocol]) revert ProtocolNotAllowed(_protocol);
 
-        // Check single position size cap
-        if (_amount > $.maxPositionSize) {
-            revert MaxPositionSizeExceeded(_amount, $.maxPositionSize);
+        // Position size check — still global
+        if (_amount > $.maxPositionSize) revert MaxPositionSizeExceeded(_amount, $.maxPositionSize);
+
+        // Per-action daily reset
+        if (block.timestamp >= $.actionLastReset[_selector] + 24 hours) {
+            $.actionDailySpent[_selector] = 0;
+            $.actionLastReset[_selector] = block.timestamp;
         }
 
-        // Check remaining daily budget
-        // Subtraction is safe — dailySpent never exceeds dailySpendLimit
-        // because we check before adding
-        uint256 remaining = $.dailySpendLimit - $.dailySpent;
+        // Per-action daily limit check
+        uint256 limit = $.actionDailyLimit[_selector];
+        uint256 spent = $.actionDailySpent[_selector];
+        uint256 remaining = limit - spent;
+
         if (_amount > remaining) {
-            revert DailySpendLimitExceeded(_amount, remaining);
+            revert ActionDailyLimitExceeded(_selector, _amount, remaining);
         }
 
-        // EFFECTS — update state before any external call
-        $.dailySpent += _amount;
-        emit SpendRecorded(_amount, $.dailySpent);
+        // Record spend
+        $.actionDailySpent[_selector] += _amount;
+        emit ActionSpendRecorded(_selector, _amount, $.actionDailySpent[_selector]);
     }
 }

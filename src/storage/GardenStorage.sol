@@ -30,10 +30,22 @@ pragma solidity ^0.8.28;
  * @dev Defines what a manager is allowed to do.
  *      Owner sets these. Manager cannot exceed them.
  *
- * dialySpendLimit:
- *      Max ETH value a manager can move in a 24hr window.
- *      Resets every 24 hours from lastResetTimestamp.
+ * actionDailyLimit:
+ *      Per-action daily spend limit
+ *      Keyed by function selector
+ *      e.g. depositToAave.selector → 6000 USDC per day
+ *           swap.selector          → 5000 USDC per day
+ *      Each action type has an independent budget
+ *      Exhausting swap budget does not block deposit budget
+ * 
+ * actionDailySpent:
+ *      Running total spent per action type today.
+ *      Resets independently per action when 24hrs pass.
  *
+ * actionLastReset:
+ *      Timestamp of last reset per action type.
+ *      Each action resets independently — swap and deposit
+ *      do not share a reset window.
  * allowedProtocols:
  *      Whitelist of contract addresses a manager can intereact with.
  *      e.g. Aave pool, Uniswap router.
@@ -46,14 +58,31 @@ pragma solidity ^0.8.28;
  * initialized:
  *      Guards against re-initialization attack
  *      Set to true after first init. Can never be set to false.
+ * 
+ * WHY PER-ACTION LIMITS OVER GLOBAL DAILY LIMIT:
+ *      A global daily limit blocks legitimate multi-step strategies.
+ *      Example: manager swaps 5000 USDC → ETH, then deposits
+ *      proceeds into Aave. With global limit, swap consumes budget
+ *      and blocks the deposit. With per-action limits, each step
+ *      has its own independent budget — complex strategies work
+ *      without one action type starving another.
+ *
+ *      This mirrors Enzyme Finance's policy framework applied
+ *      at the action-type level.
  */
 
 struct RiskParamsStorage {
-    uint256 dailySpendLimit;
+    // Per-action limits — selector → daily limit
+    mapping(bytes4 => uint256) actionDailyLimit;
+    mapping(bytes4 => uint256) actionDailySpent;
+    mapping(bytes4 => uint256) actionLastReset;
+
+    // Global position cap 
     uint256 maxPositionSize;
-    uint256 dailySpent;
-    uint256 lastResetTimestamp;
+
+    // Protocol whitelist — still applies
     mapping(address => bool) allowedProtocols;
+
     bool initialized;
 }
 

@@ -162,7 +162,8 @@ contract ManagerFacet {
         // Checks + Effects - 2. Enforce risk params and record spend
         // This updates dailySpent BEFORE the external call
         // Reentrancy cannot explout a stale dailySpent value
-        LibRiskParams.enforceAndRecord(_value, _protocol);
+
+        LibRiskParams.enforceAndRecord(_value, _protocol, ManagerFacet.execute.selector);
 
         // Interactions - 3. Execute the call
         (bool success, bytes memory reason) = _protocol.call{value: _value}(_data);

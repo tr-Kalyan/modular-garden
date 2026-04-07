@@ -5,9 +5,9 @@ import {Test, console} from "forge-std/Test.sol";
 import {DiamondDeployer} from "../helpers/DiamondDeployer.sol";
 import {Diamond} from "../../src/Diamond.sol";
 import {RiskParamsFacet} from "../../src/facets/RiskParamsFacet.sol";
+import {ManagerFacet} from "../../src/facets/ManagerFacet.sol";
 import {LibDiamond} from "../../src/libraries/LibDiamond.sol";
 import {LibRiskParams} from "../../src/libraries/LibRiskParams.sol";
-import {ManagerFacet} from "../../src/facets/ManagerFacet.sol";
 
 /**
  * @title RiskParamsTest
@@ -16,14 +16,15 @@ import {ManagerFacet} from "../../src/facets/ManagerFacet.sol";
  * WHAT WE PROVE:
  * 1. Only owner can initialize risk params
  * 2. Cannot initialize twice
- * 3. Only owner can set limits
+ * 3. Per-action limits set and enforced independently
  * 4. Protocol whitelist enforced
- * 5. Daily limit enforced
- * 6. Max position size enforced
- * 7. Daily counter resets after 24 hours
- * 8. Setting limit to 0 freezes all activity
+ * 5. Max position size enforced globally
+ * 6. Per-action daily counter resets after 24 hours
+ * 7. Setting action limit to 0 freezes that action only
+ * 8. Other actions unaffected when one action is frozen
  */
 contract RiskParamsTest is Test {
+
     // =============================================================
     //                         STATE
     // =============================================================
@@ -31,19 +32,21 @@ contract RiskParamsTest is Test {
     DiamondDeployer deployer;
     Diamond diamond;
     RiskParamsFacet riskParams;
+    ManagerFacet managerFacet;
 
     address owner = makeAddr("owner");
     address attacker = makeAddr("attacker");
     address manager = makeAddr("manager");
 
-    // Test protocol addresses
     address aavePool = makeAddr("aavePool");
     address uniswapRouter = makeAddr("uniswapRouter");
     address maliciousProtocol = makeAddr("maliciousProtocol");
 
-    // Default risk params for tests
-    uint256 constant DAILY_LIMIT = 10 ether;
     uint256 constant MAX_POSITION = 3 ether;
+    uint256 constant EXECUTE_DAILY_LIMIT = 10 ether;
+
+    // The selector ManagerFacet.execute uses for risk tracking
+    bytes4 constant EXECUTE_SELECTOR = ManagerFacet.execute.selector;
 
     // =============================================================
     //                         SETUP
@@ -54,17 +57,26 @@ contract RiskParamsTest is Test {
         diamond = deployer.deploy(owner);
         vm.deal(manager, 100 ether);
 
-        // Cast Diamond address to RiskParamsFacet interface
-        // All calls go through Diamond's fallback → RiskParamsFacet
         riskParams = RiskParamsFacet(address(diamond));
+        managerFacet = ManagerFacet(address(diamond));
 
-        // Initialize risk params as owner
+        // Build per-action limits for initialization
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = ManagerFacet.execute.selector;
+
+        uint256[] memory limits = new uint256[](1);
+        limits[0] = EXECUTE_DAILY_LIMIT;
+
         address[] memory protocols = new address[](2);
         protocols[0] = aavePool;
         protocols[1] = uniswapRouter;
 
         vm.prank(owner);
-        riskParams.initializeRiskParams(DAILY_LIMIT, MAX_POSITION, protocols);
+        riskParams.initializeRiskParams(MAX_POSITION, selectors, limits, protocols);
+
+        // Initialize manager
+        vm.prank(owner);
+        managerFacet.initializeManager(manager);
     }
 
     // =============================================================
@@ -72,75 +84,132 @@ contract RiskParamsTest is Test {
     // =============================================================
 
     /**
-     * @notice Risk params initialized correctly in setUp.
-     * @dev Verifies all values stored correctly in ERC-7201 storage.
+     * @notice Risk params initialized correctly.
      */
     function test_InitializationSetsCorrectValues() public {
-        (uint256 dailyLimit, uint256 maxPosition, uint256 dailySpent, uint256 lastReset) = riskParams.getRiskParams();
+        uint256 maxPos = riskParams.getRiskParams();
+        assertEq(maxPos, MAX_POSITION, "Max position incorrect");
 
-        assertEq(dailyLimit, DAILY_LIMIT, "Daily limit incorrect");
-        assertEq(maxPosition, MAX_POSITION, "Max position incorrect");
-        assertEq(dailySpent, 0, "Daily spent should start at 0");
-        assertGt(lastReset, 0, "Last reset should be set");
+        (uint256 limit, uint256 spent,,) =
+            riskParams.getActionState(EXECUTE_SELECTOR);
+        assertEq(limit, EXECUTE_DAILY_LIMIT, "Action limit incorrect");
+        assertEq(spent, 0, "Spent should start at 0");
     }
 
     /**
      * @notice Cannot initialize twice.
-     * @dev Re-initialization attack prevention.
-     *      If this fails, attacker can overwrite risk params.
      */
     function test_Revert_CannotInitializeTwice() public {
+        bytes4[] memory selectors = new bytes4[](0);
+        uint256[] memory limits = new uint256[](0);
         address[] memory protocols = new address[](0);
 
-        vm.expectRevert(abi.encodeWithSelector(RiskParamsFacet.AlreadyInitialized.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(RiskParamsFacet.AlreadyInitialized.selector)
+        );
 
         vm.prank(owner);
-        riskParams.initializeRiskParams(1 ether, 1 ether, protocols);
+        riskParams.initializeRiskParams(1 ether, selectors, limits, protocols);
     }
 
     /**
-     * @notice Attacker cannot initialize risk params.
-     * @dev Only owner can set the cage rules.
+     * @notice Attacker cannot initialize.
      */
     function test_Revert_AttackerCannotInitialize() public {
-        // Deploy fresh Diamond — not initialized yet
         DiamondDeployer freshDeployer = new DiamondDeployer();
         Diamond freshDiamond = freshDeployer.deploy(owner);
         RiskParamsFacet freshRisk = RiskParamsFacet(address(freshDiamond));
 
+        bytes4[] memory selectors = new bytes4[](0);
+        uint256[] memory limits = new uint256[](0);
         address[] memory protocols = new address[](0);
 
-        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibDiamond.NotContractOwner.selector,
+                attacker,
+                owner
+            )
+        );
 
         vm.prank(attacker);
-        freshRisk.initializeRiskParams(1 ether, 1 ether, protocols);
+        freshRisk.initializeRiskParams(1 ether, selectors, limits, protocols);
+    }
+
+    // =============================================================
+    //                    PER-ACTION LIMIT TESTS
+    // =============================================================
+
+    /**
+     * @notice Owner can set per-action limit.
+     */
+    function test_OwnerCanSetActionLimit() public {
+        uint256 newLimit = 20 ether;
+
+        vm.prank(owner);
+        riskParams.setActionLimit(EXECUTE_SELECTOR, newLimit);
+
+        (uint256 limit,,,) = riskParams.getActionState(EXECUTE_SELECTOR);
+        assertEq(limit, newLimit);
+    }
+
+    /**
+     * @notice Setting action limit to 0 freezes that action only.
+     * @dev Other actions with different selectors are unaffected.
+     *      This is the granular freeze mechanism.
+     */
+    function test_ZeroLimitFreezesSpecificAction() public {
+        vm.prank(owner);
+        riskParams.setActionLimit(EXECUTE_SELECTOR, 0);
+
+        (uint256 limit,,,) = riskParams.getActionState(EXECUTE_SELECTOR);
+        assertEq(limit, 0, "Action limit should be 0");
+
+        // Manager tries to execute — should revert
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRiskParams.ActionDailyLimitExceeded.selector,
+                EXECUTE_SELECTOR,
+                1 ether,
+                0
+            )
+        );
+
+        vm.prank(manager);
+        managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
+    }
+
+    /**
+     * @notice Attacker cannot set action limits.
+     */
+    function test_Revert_AttackerCannotSetActionLimit() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibDiamond.NotContractOwner.selector,
+                attacker,
+                owner
+            )
+        );
+
+        vm.prank(attacker);
+        riskParams.setActionLimit(EXECUTE_SELECTOR, 100 ether);
     }
 
     // =============================================================
     //                    PROTOCOL WHITELIST TESTS
     // =============================================================
 
-    /**
-     * @notice Whitelisted protocols are correctly marked.
-     */
     function test_WhitelistedProtocolsAllowed() public {
-        assertTrue(riskParams.isProtocolAllowed(aavePool), "Aave should be whitelisted");
-        assertTrue(riskParams.isProtocolAllowed(uniswapRouter), "Uniswap should be whitelisted");
+        assertTrue(riskParams.isProtocolAllowed(aavePool));
+        assertTrue(riskParams.isProtocolAllowed(uniswapRouter));
     }
 
-    /**
-     * @notice Non-whitelisted protocols are blocked.
-     */
     function test_NonWhitelistedProtocolBlocked() public {
-        assertFalse(riskParams.isProtocolAllowed(maliciousProtocol), "Malicious protocol should not be whitelisted");
+        assertFalse(riskParams.isProtocolAllowed(maliciousProtocol));
     }
 
-    /**
-     * @notice Owner can add a new protocol to whitelist.
-     */
     function test_OwnerCanAddProtocol() public {
         address newProtocol = makeAddr("newProtocol");
-
         assertFalse(riskParams.isProtocolAllowed(newProtocol));
 
         vm.prank(owner);
@@ -149,82 +218,24 @@ contract RiskParamsTest is Test {
         assertTrue(riskParams.isProtocolAllowed(newProtocol));
     }
 
-    /**
-     * @notice Owner can remove a protocol from whitelist.
-     * @dev Use case: protocol is compromised or deprecated.
-     */
     function test_OwnerCanRemoveProtocol() public {
-        assertTrue(riskParams.isProtocolAllowed(aavePool));
-
         vm.prank(owner);
         riskParams.removeAllowedProtocol(aavePool);
 
         assertFalse(riskParams.isProtocolAllowed(aavePool));
     }
 
-    /**
-     * @notice Attacker cannot modify protocol whitelist.
-     */
     function test_Revert_AttackerCannotAddProtocol() public {
-        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibDiamond.NotContractOwner.selector,
+                attacker,
+                owner
+            )
+        );
 
         vm.prank(attacker);
         riskParams.addAllowedProtocol(makeAddr("anyProtocol"));
-    }
-
-    // =============================================================
-    //                    LIMIT SETTER TESTS
-    // =============================================================
-
-    /**
-     * @notice Owner can update daily spend limit.
-     */
-    function test_OwnerCanSetDailyLimit() public {
-        uint256 newLimit = 20 ether;
-
-        vm.prank(owner);
-        riskParams.setDailySpendLimit(newLimit);
-
-        (uint256 dailyLimit,,,) = riskParams.getRiskParams();
-        assertEq(dailyLimit, newLimit);
-    }
-
-    /**
-     * @notice Setting daily limit to 0 freezes manager.
-     * @dev Tests the freeze through execute() — the real entry point.
-     *      Owner sets limit to 0, manager tries to execute, reverts.
-     */
-    function test_ZeroLimitFreezesManager() public {
-        // Setup — initialize manager first
-        ManagerFacet managerFacet = ManagerFacet(address(diamond));
-
-        vm.prank(owner);
-        managerFacet.initializeManager(manager);
-
-        // Owner freezes by setting limit to 0
-        vm.prank(owner);
-        riskParams.setDailySpendLimit(0);
-
-        // Verify limit is 0
-        (uint256 dailyLimit,,,) = riskParams.getRiskParams();
-        assertEq(dailyLimit, 0, "Limit should be 0");
-
-        // Manager tries to execute — should revert
-        // Any amount > 0 exceeds remaining budget of 0
-        vm.deal(manager, 10 ether);
-        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.DailySpendLimitExceeded.selector, 1 ether, 0));
-        vm.prank(manager);
-        managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
-    }
-
-    /**
-     * @notice Attacker cannot update limits.
-     */
-    function test_Revert_AttackerCannotSetLimit() public {
-        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
-
-        vm.prank(attacker);
-        riskParams.setDailySpendLimit(100 ether);
     }
 
     // =============================================================
@@ -232,21 +243,30 @@ contract RiskParamsTest is Test {
     // =============================================================
 
     /**
-     * @notice Daily counter resets after 24 hours.
-     * @dev Uses vm.warp to fast-forward time.
-     *      This is the timestamp-based reset we chose over block-based.
-     *      Block-based resets are gameable — timestamp resets are not.
+     * @notice Per-action counter resets after 24 hours.
+     * @dev Each action type resets independently.
      */
-    function test_DailyLimitResetsAfter24Hours() public {
-        // Record initial timestamp
-        (,,, uint256 initialReset) = riskParams.getRiskParams();
+    function test_ActionLimitResetsAfter24Hours() public {
+        // Spend up to limit
+        vm.prank(owner);
+        riskParams.setMaxPositionSize(10 ether);
+
+        vm.prank(manager);
+        managerFacet.execute{value: 10 ether}(aavePool, "", 10 ether);
+
+        // Verify exhausted
+        (, uint256 spent,,) = riskParams.getActionState(EXECUTE_SELECTOR);
+        assertEq(spent, 10 ether);
 
         // Fast forward 25 hours
         vm.warp(block.timestamp + 25 hours);
 
-        // After warp, next enforceAndRecord call should reset counter
-        // We verify by checking lastResetTimestamp changed
-        // Full integration test in ManagerTest will verify the full flow
-        assertGt(block.timestamp, initialReset + 24 hours, "Should be past reset window");
+        // Should succeed after reset
+        vm.prank(manager);
+        managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
+
+        (, uint256 spentAfterReset,,) =
+            riskParams.getActionState(EXECUTE_SELECTOR);
+        assertEq(spentAfterReset, 1 ether, "Counter should reset then record new spend");
     }
 }

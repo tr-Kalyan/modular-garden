@@ -101,7 +101,7 @@ contract AaveFacet {
         AaveStorage storage $ = LibAaveStorage.get();
         // Only deposits count toward risk limits
         // Withdrawals reduce exposure — not charged against daily limit
-        LibRiskParams.enforceAndRecord(_amount, $.aavePool);
+        LibRiskParams.enforceAndRecord(_amount, $.aavePool, AaveFacet.depositToAave.selector);
 
         // Verify Diamond has enough token balance
         uint256 balance = IERC20(_asset).balanceOf(address(this));

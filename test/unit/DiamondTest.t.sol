@@ -192,11 +192,13 @@ contract DiamondTest is Test {
         // This either reverts (owner check fails on empty storage)
         // or silently writes to facet's own empty storage
         // Either way — Diamond's storage is unaffected
-        try directFacet.initializeRiskParams(1000, 100, protocols) {
+        bytes4[] memory selectors = new bytes4[](0);
+        uint256[] memory limits = new uint256[](0);
+        try directFacet.initializeRiskParams(1000, selectors, limits, protocols) {
             // If it didn't revert — verify Diamond storage unchanged
             RiskParamsFacet diamondRisk = RiskParamsFacet(address(diamond));
-            (uint256 limit,,,) = diamondRisk.getRiskParams();
-            assertEq(limit, 0, "Diamond storage should be unaffected");
+            uint256 maxPos = diamondRisk.getRiskParams();
+            assertEq(maxPos, 0, "Diamond storage should be unaffected");
         } catch {
             // Reverted — also correct behavior
             assertTrue(true, "Direct call correctly reverted");

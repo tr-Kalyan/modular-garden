@@ -73,7 +73,11 @@ contract ManagerTest is Test {
         protocols[1] = uniswapRouter;
 
         vm.prank(owner);
-        riskParams.initializeRiskParams(DAILY_LIMIT, MAX_POSITION, protocols);
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = ManagerFacet.execute.selector;
+        uint256[] memory limits = new uint256[](1);
+        limits[0] = DAILY_LIMIT;
+        riskParams.initializeRiskParams(MAX_POSITION, selectors, limits, protocols);
 
         // Initialize manager
         vm.prank(owner);
@@ -194,7 +198,15 @@ contract ManagerTest is Test {
         riskParams.setMaxPositionSize(15 ether);
 
         // Try to spend 11 ether — exceeds 10 ether daily limit
-        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.DailySpendLimitExceeded.selector, 11 ether, 10 ether));
+        bytes4 executeSelector = bytes4(keccak256("execute(address,bytes,uint256)"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRiskParams.ActionDailyLimitExceeded.selector,
+                executeSelector,
+                11 ether,
+                10 ether
+            )
+        );
 
         vm.prank(manager);
         managerFacet.execute{value: 11 ether}(aavePool, "", 11 ether);
@@ -239,7 +251,8 @@ contract ManagerTest is Test {
      */
     function test_Attack_FailedExecutionStillCountsSpend() public {
         // Record initial daily spent
-        (,, uint256 spentBefore,) = riskParams.getRiskParams();
+        bytes4 executeSelector = bytes4(keccak256("execute(address,bytes,uint256)"));
+        (, uint256 spentBefore,,) = riskParams.getActionState(executeSelector);
         assertEq(spentBefore, 0);
 
         // Execute with bad calldata — aavePool has no code,
@@ -249,7 +262,7 @@ contract ManagerTest is Test {
         managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
 
         // Verify spend was recorded even though protocol did nothing
-        (,, uint256 spentAfter,) = riskParams.getRiskParams();
+        (, uint256 spentAfter,,) = riskParams.getActionState(executeSelector);
         assertEq(spentAfter, 1 ether, "Spend must be recorded after execution");
     }
 
@@ -271,7 +284,15 @@ contract ManagerTest is Test {
 
         // 9 ether spent. Only 1 ether remaining.
         // Try 2 ether — should fail
-        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.DailySpendLimitExceeded.selector, 2 ether, 1 ether));
+        bytes4 executeSelector = bytes4(keccak256("execute(address,bytes,uint256)"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRiskParams.ActionDailyLimitExceeded.selector,
+                executeSelector,
+                2 ether,
+                1 ether
+            )
+        );
 
         vm.prank(manager);
         managerFacet.execute{value: 2 ether}(aavePool, "", 2 ether);
@@ -283,6 +304,8 @@ contract ManagerTest is Test {
      *      Proves the timestamp-based reset works end to end.
      */
     function test_DailyLimitResetsAfter24Hours() public {
+        bytes4 executeSelector = bytes4(keccak256("execute(address,bytes,uint256)"));
+
         // Exhaust the daily limit
         vm.prank(owner);
         riskParams.setMaxPositionSize(10 ether);
@@ -291,11 +314,18 @@ contract ManagerTest is Test {
         managerFacet.execute{value: 10 ether}(aavePool, "", 10 ether);
 
         // Verify limit exhausted
-        (,, uint256 spent,) = riskParams.getRiskParams();
+        (, uint256 spent,,) = riskParams.getActionState(executeSelector);
         assertEq(spent, 10 ether);
 
         // Try again — should fail
-        vm.expectRevert(abi.encodeWithSelector(LibRiskParams.DailySpendLimitExceeded.selector, 1 ether, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRiskParams.ActionDailyLimitExceeded.selector,
+                executeSelector,
+                1 ether,
+                0
+            )
+        );
         vm.prank(manager);
         managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
 
@@ -307,7 +337,7 @@ contract ManagerTest is Test {
         managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
 
         // Verify counter reset and new spend recorded
-        (,, uint256 spentAfterReset,) = riskParams.getRiskParams();
+        (, uint256 spentAfterReset,,) = riskParams.getActionState(executeSelector);
         assertEq(spentAfterReset, 1 ether, "Counter should reset then record new spend");
     }
 }
