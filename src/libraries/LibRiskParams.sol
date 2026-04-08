@@ -35,9 +35,8 @@ library LibRiskParams {
      * @param selector      Function selector identifying the action type
      * @param amount        Value of this action
      * @param totalSpent    Running total spent for this action type today
-    */
+     */
     event ActionSpendRecorded(bytes4 indexed selector, uint256 amount, uint256 totalSpent);
-
 
     /**
      * @notice Enforce all risk checks and record the spend.
@@ -59,12 +58,14 @@ library LibRiskParams {
      * @param _amount    Value of the action
      * @param _protocol  Target protocol address
      * @param _selector  Function selector identifying action type
-    */
+     */
     function enforceAndRecord(
         uint256 _amount,
         address _protocol,
-        bytes4 _selector        // which action type
-    ) internal {
+        bytes4 _selector // which action type
+    )
+        internal
+    {
         if (_amount == 0) revert InvalidAmount();
 
         RiskParamsStorage storage $ = LibRiskParamsStorage.get();

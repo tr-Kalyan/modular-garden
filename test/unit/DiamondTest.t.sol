@@ -83,7 +83,7 @@ contract DiamondTest is Test {
 
         // We installed 4 facets: DiamondCut, DiamondLoupe,
         // RiskParams, Manager
-        assertEq(facetAddrs.length, 5, "Should have 5 facets registered");
+        assertEq(facetAddrs.length, 6, "Should have 6 facets registered");
         console.log("Facets registered:", facetAddrs.length);
     }
 

@@ -28,7 +28,6 @@ import {LibRiskParamsStorage, RiskParamsStorage} from "../storage/GardenStorage.
  * tied to 24-hour windows are harder to game.
  */
 contract RiskParamsFacet {
-
     // =============================================================
     //                         EVENTS
     // =============================================================
@@ -86,14 +85,18 @@ contract RiskParamsFacet {
         for (uint256 i; i < _selectors.length;) {
             $.actionDailyLimit[_selectors[i]] = _limits[i];
             emit ActionLimitSet(_selectors[i], 0, _limits[i]);
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         // Whitelist protocols
         for (uint256 i; i < _allowedProtocols.length;) {
             $.allowedProtocols[_allowedProtocols[i]] = true;
             emit ProtocolAllowed(_allowedProtocols[i]);
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         emit RiskParamsInitialized(_maxPositionSize);
@@ -176,9 +179,7 @@ contract RiskParamsFacet {
     /**
      * @notice Returns global risk parameters.
      */
-    function getRiskParams() external view returns (
-        uint256 maxPositionSize
-    ) {
+    function getRiskParams() external view returns (uint256 maxPositionSize) {
         RiskParamsStorage storage $ = LibRiskParamsStorage.get();
         return $.maxPositionSize;
     }
@@ -187,12 +188,11 @@ contract RiskParamsFacet {
      * @notice Returns per-action limit and current spend.
      * @param _selector Function selector to query
      */
-    function getActionState(bytes4 _selector) external view returns (
-        uint256 dailyLimit,
-        uint256 dailySpent,
-        uint256 lastReset,
-        uint256 remaining
-    ) {
+    function getActionState(bytes4 _selector)
+        external
+        view
+        returns (uint256 dailyLimit, uint256 dailySpent, uint256 lastReset, uint256 remaining)
+    {
         RiskParamsStorage storage $ = LibRiskParamsStorage.get();
         dailyLimit = $.actionDailyLimit[_selector];
         dailySpent = $.actionDailySpent[_selector];

@@ -24,7 +24,6 @@ import {LibRiskParams} from "../../src/libraries/LibRiskParams.sol";
  * 8. Other actions unaffected when one action is frozen
  */
 contract RiskParamsTest is Test {
-
     // =============================================================
     //                         STATE
     // =============================================================
@@ -90,8 +89,7 @@ contract RiskParamsTest is Test {
         uint256 maxPos = riskParams.getRiskParams();
         assertEq(maxPos, MAX_POSITION, "Max position incorrect");
 
-        (uint256 limit, uint256 spent,,) =
-            riskParams.getActionState(EXECUTE_SELECTOR);
+        (uint256 limit, uint256 spent,,) = riskParams.getActionState(EXECUTE_SELECTOR);
         assertEq(limit, EXECUTE_DAILY_LIMIT, "Action limit incorrect");
         assertEq(spent, 0, "Spent should start at 0");
     }
@@ -104,9 +102,7 @@ contract RiskParamsTest is Test {
         uint256[] memory limits = new uint256[](0);
         address[] memory protocols = new address[](0);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(RiskParamsFacet.AlreadyInitialized.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(RiskParamsFacet.AlreadyInitialized.selector));
 
         vm.prank(owner);
         riskParams.initializeRiskParams(1 ether, selectors, limits, protocols);
@@ -124,13 +120,7 @@ contract RiskParamsTest is Test {
         uint256[] memory limits = new uint256[](0);
         address[] memory protocols = new address[](0);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         vm.prank(attacker);
         freshRisk.initializeRiskParams(1 ether, selectors, limits, protocols);
@@ -167,12 +157,7 @@ contract RiskParamsTest is Test {
 
         // Manager tries to execute — should revert
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.ActionDailyLimitExceeded.selector,
-                EXECUTE_SELECTOR,
-                1 ether,
-                0
-            )
+            abi.encodeWithSelector(LibRiskParams.ActionDailyLimitExceeded.selector, EXECUTE_SELECTOR, 1 ether, 0)
         );
 
         vm.prank(manager);
@@ -183,13 +168,7 @@ contract RiskParamsTest is Test {
      * @notice Attacker cannot set action limits.
      */
     function test_Revert_AttackerCannotSetActionLimit() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         vm.prank(attacker);
         riskParams.setActionLimit(EXECUTE_SELECTOR, 100 ether);
@@ -226,13 +205,7 @@ contract RiskParamsTest is Test {
     }
 
     function test_Revert_AttackerCannotAddProtocol() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibDiamond.NotContractOwner.selector,
-                attacker,
-                owner
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibDiamond.NotContractOwner.selector, attacker, owner));
 
         vm.prank(attacker);
         riskParams.addAllowedProtocol(makeAddr("anyProtocol"));
@@ -265,8 +238,7 @@ contract RiskParamsTest is Test {
         vm.prank(manager);
         managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);
 
-        (, uint256 spentAfterReset,,) =
-            riskParams.getActionState(EXECUTE_SELECTOR);
+        (, uint256 spentAfterReset,,) = riskParams.getActionState(EXECUTE_SELECTOR);
         assertEq(spentAfterReset, 1 ether, "Counter should reset then record new spend");
     }
 }

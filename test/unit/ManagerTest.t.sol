@@ -200,12 +200,7 @@ contract ManagerTest is Test {
         // Try to spend 11 ether — exceeds 10 ether daily limit
         bytes4 executeSelector = bytes4(keccak256("execute(address,bytes,uint256)"));
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.ActionDailyLimitExceeded.selector,
-                executeSelector,
-                11 ether,
-                10 ether
-            )
+            abi.encodeWithSelector(LibRiskParams.ActionDailyLimitExceeded.selector, executeSelector, 11 ether, 10 ether)
         );
 
         vm.prank(manager);
@@ -286,12 +281,7 @@ contract ManagerTest is Test {
         // Try 2 ether — should fail
         bytes4 executeSelector = bytes4(keccak256("execute(address,bytes,uint256)"));
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.ActionDailyLimitExceeded.selector,
-                executeSelector,
-                2 ether,
-                1 ether
-            )
+            abi.encodeWithSelector(LibRiskParams.ActionDailyLimitExceeded.selector, executeSelector, 2 ether, 1 ether)
         );
 
         vm.prank(manager);
@@ -319,12 +309,7 @@ contract ManagerTest is Test {
 
         // Try again — should fail
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRiskParams.ActionDailyLimitExceeded.selector,
-                executeSelector,
-                1 ether,
-                0
-            )
+            abi.encodeWithSelector(LibRiskParams.ActionDailyLimitExceeded.selector, executeSelector, 1 ether, 0)
         );
         vm.prank(manager);
         managerFacet.execute{value: 1 ether}(aavePool, "", 1 ether);

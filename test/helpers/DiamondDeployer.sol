@@ -9,6 +9,7 @@ import {ManagerFacet} from "../../src/facets/ManagerFacet.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {ECDSAValidatorFacet} from "../../src/facets/ECDSAValidatorFacet.sol";
+import {SwapFacet} from "../../src/facets/SwapFacet.sol";
 
 /**
  * @title DiamondDeployer
@@ -23,6 +24,7 @@ contract DiamondDeployer {
     RiskParamsFacet public riskParamsFacet;
     ManagerFacet public managerFacet;
     ECDSAValidatorFacet public ecdsaValidatorFacet;
+    SwapFacet public swapFacet;
 
     // Facet interfaces cast to Diamond address
     // This is how we call facet functions in tests
@@ -45,6 +47,7 @@ contract DiamondDeployer {
         riskParamsFacet = new RiskParamsFacet();
         managerFacet = new ManagerFacet();
         ecdsaValidatorFacet = new ECDSAValidatorFacet();
+        swapFacet = new SwapFacet();
 
         // Step 2 - Deploy Diamond with owner + DiamondCutFacet
         // Constructor registers DiamondCutFacet automatically
@@ -52,7 +55,7 @@ contract DiamondDeployer {
 
         // Step 3 - Build the cut array from remaining facets
         // Each FacetCut says: add these selectors from this facet
-        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](4);
+        IDiamondCut.FacetCut[] memory cuts = new IDiamondCut.FacetCut[](5);
 
         // DiamondLoupeFacet - 4 selectors
         bytes4[] memory loupeSelectors = new bytes4[](4);
@@ -111,6 +114,16 @@ contract DiamondDeployer {
             functionSelectors: validatorSelectors
         });
 
+        // Add to DiamondDeployer — SwapFacet selectors
+        bytes4[] memory swapSelectors = new bytes4[](4);
+        swapSelectors[0] = SwapFacet.initializeSwap.selector;
+        swapSelectors[1] = SwapFacet.swap.selector;
+        swapSelectors[2] = SwapFacet.setDefaultSlippage.selector;
+        swapSelectors[3] = SwapFacet.getSwapState.selector;
+
+        cuts[4] = IDiamondCut.FacetCut({
+            facetAddress: address(swapFacet), action: IDiamondCut.FacetCutAction.Add, functionSelectors: swapSelectors
+        });
         // Step 4 — Execute the cut as owner
         // Cast Diamond to IDiamondCut to call diamondCut()
         // This goes through Diamond's fallback → DiamondCutFacet

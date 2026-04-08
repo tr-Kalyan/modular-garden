@@ -37,7 +37,7 @@ pragma solidity ^0.8.28;
  *           swap.selector          → 5000 USDC per day
  *      Each action type has an independent budget
  *      Exhausting swap budget does not block deposit budget
- * 
+ *
  * actionDailySpent:
  *      Running total spent per action type today.
  *      Resets independently per action when 24hrs pass.
@@ -58,7 +58,7 @@ pragma solidity ^0.8.28;
  * initialized:
  *      Guards against re-initialization attack
  *      Set to true after first init. Can never be set to false.
- * 
+ *
  * WHY PER-ACTION LIMITS OVER GLOBAL DAILY LIMIT:
  *      A global daily limit blocks legitimate multi-step strategies.
  *      Example: manager swaps 5000 USDC → ETH, then deposits
@@ -77,7 +77,7 @@ struct RiskParamsStorage {
     mapping(bytes4 => uint256) actionDailySpent;
     mapping(bytes4 => uint256) actionLastReset;
 
-    // Global position cap 
+    // Global position cap
     uint256 maxPositionSize;
 
     // Protocol whitelist — still applies
