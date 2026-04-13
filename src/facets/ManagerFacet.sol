@@ -177,6 +177,76 @@ contract ManagerFacet {
     }
 
     // =============================================================
+    //                    MANAGER — BATCH EXECUTE
+    // =============================================================
+
+    /**
+     * @notice A single action in a batch execution
+     * @param protocol  Whitelisted protocol to call
+     * @param data      Encoded function call
+     * @param value     ETH to send with this action
+     */
+    struct Action {
+        address protocol;
+        bytes data;
+        uint256 value;
+    }
+
+    /**
+     * @notice Execute multiple DeFi actions atomically
+     * @dev Only manager. Each action checked against its own rist limit
+     *      ATOMICITY: If any action reverts, entire batch reverts
+     *      No partial execution. No intermediate state left behind
+     *
+     * PER-ACTION RISK ENFORCEMENT:
+     *      Each action is checked independently against its own selector's
+     *      daily limit. Swap budget and deposit budget are independent.
+     *      Manager can chain: swap → deposit proceeds → earn yield
+     *      Each step only consumes its own action type's budget
+     *
+     * @param _actions Arrays of actions to execute in sequence
+     */
+    function executeBatch(Action[] calldata _actions) external payable {
+        // Check caller is manager - single check covers entire batch
+        ManagerStorage storage $ = LibManagerStorage.get();
+        if (msg.sender != $.manager) revert NotManager(msg.sender);
+
+        for (uint256 i; i < _actions.length;) {
+            Action calldata action = _actions[i];
+
+            // Extract selector from calldata — first 4 bytes
+            // This is the actual DeFi function being called
+            // e.g. depositToAave.selector, swap.selector
+            // Each action tracked against its own budget
+            bytes memory data = action.data;
+
+            bytes4 actionSelector;
+            if (data.length >= 4) {
+                assembly {
+                    actionSelector := mload(add(data, 32))
+                }
+            }
+
+            // CHECKS + EFFECTS — enforce risk params and record spend
+            // Happens before external call — CEI pattern
+            LibRiskParams.enforceAndRecord(action.value, action.protocol, actionSelector);
+
+            // INTERACTIONS — execute the action
+            (bool success, bytes memory reason) = action.protocol.call{value: action.value}(data);
+
+            if (success) {
+                emit ExecutionSuccess(msg.sender, action.protocol, action.value, action.data);
+            } else {
+                emit ExecutionFailed(msg.sender, action.protocol, reason);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    // =============================================================
     //                        VIEW FUNCTIONS
     // =============================================================
 

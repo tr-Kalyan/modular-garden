@@ -88,13 +88,14 @@ contract DiamondDeployer {
         });
 
         // ManagerFacet selectors
-        bytes4[] memory managerSelectors = new bytes4[](6);
+        bytes4[] memory managerSelectors = new bytes4[](7);
         managerSelectors[0] = ManagerFacet.initializeManager.selector;
         managerSelectors[1] = ManagerFacet.setManager.selector;
         managerSelectors[2] = ManagerFacet.revokeManager.selector;
         managerSelectors[3] = ManagerFacet.execute.selector;
         managerSelectors[4] = ManagerFacet.getManager.selector;
         managerSelectors[5] = ManagerFacet.isManager.selector;
+        managerSelectors[6] = ManagerFacet.executeBatch.selector;
 
         cuts[2] = IDiamondCut.FacetCut({
             facetAddress: address(managerFacet),
